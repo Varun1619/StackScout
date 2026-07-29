@@ -65,23 +65,45 @@ function extractJsonBlock(text: string): unknown {
 }
 
 async function callClaude(prompt: string): Promise<string> {
-  const response = await anthropic.messages.create({
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: prompt },
+  ];
+  const baseParams = {
     model: "claude-sonnet-5",
-    max_tokens: 2000,
+    max_tokens: 8000,
     tools: [
       {
-        type: "web_search_20250305",
-        name: "web_search",
+        type: "web_search_20250305" as const,
+        name: "web_search" as const,
         max_uses: 4,
       },
     ],
-    messages: [{ role: "user", content: prompt }],
-  });
+  };
 
-  const textBlocks = response.content.filter(
-    (block): block is Anthropic.TextBlock => block.type === "text",
-  );
-  return textBlocks.map((block) => block.text).join("\n");
+  let response = await anthropic.messages.create({ ...baseParams, messages });
+  const texts: string[] = [];
+
+  // The API can pause a long web-search turn (stop_reason "pause_turn").
+  // Continue by sending the paused assistant message back unchanged.
+  let continuations = 0;
+  for (;;) {
+    texts.push(
+      ...response.content
+        .filter((block): block is Anthropic.TextBlock => block.type === "text")
+        .map((block) => block.text),
+    );
+    if (response.stop_reason !== "pause_turn" || continuations >= 3) {
+      break;
+    }
+    messages.push({
+      role: "assistant",
+      content: response.content as Anthropic.ContentBlockParam[],
+    });
+    response = await anthropic.messages.create({ ...baseParams, messages });
+    continuations++;
+  }
+
+  return texts.join("\n");
 }
 
 export async function scoutTool(excludeNames: string[]): Promise<ToolPayload> {
