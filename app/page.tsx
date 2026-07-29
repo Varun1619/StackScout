@@ -6,6 +6,7 @@ import { getOrGenerateTodaysTool } from "@/lib/getTodaysTool";
 import { toToolDetailData } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 async function TodaysTool() {
   const tool = await getOrGenerateTodaysTool();
