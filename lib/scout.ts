@@ -64,6 +64,32 @@ function extractJsonBlock(text: string): unknown {
   return JSON.parse(match[1].trim());
 }
 
+// Trim oversized arrays to the schema's limits rather than failing
+// validation — the limits are presentation guidance, and a generation
+// with one extra feature or company is still perfectly good content.
+function clampArrays(data: unknown): unknown {
+  if (typeof data !== "object" || data === null) {
+    return data;
+  }
+  const d = data as Record<string, unknown>;
+  const slice = (value: unknown, max: number) =>
+    Array.isArray(value) ? value.slice(0, max) : value;
+
+  d.key_features = slice(d.key_features, 5);
+  d.papers = slice(d.papers, 3);
+  d.projects = slice(d.projects, 3);
+  d.companies = slice(d.companies, 6);
+  d.resources = slice(d.resources, 3);
+
+  const arch = d.architecture;
+  if (typeof arch === "object" && arch !== null) {
+    const a = arch as Record<string, unknown>;
+    a.components = slice(a.components, 6);
+    a.flow = slice(a.flow, 8);
+  }
+  return d;
+}
+
 async function callClaude(prompt: string): Promise<string> {
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: prompt },
@@ -112,7 +138,7 @@ export async function scoutTool(excludeNames: string[]): Promise<ToolPayload> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const text = await callClaude(prompt);
-      const parsed = extractJsonBlock(text);
+      const parsed = clampArrays(extractJsonBlock(text));
       const result = ToolSchema.safeParse(parsed);
       if (result.success) {
         return result.data;

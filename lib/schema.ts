@@ -13,10 +13,14 @@ export const ArchitectureComponentSchema = z.object({
   role: z.string().min(1),
 });
 
+// Array maxes here are backstops; scout.ts clamps oversized arrays before
+// validation so a chatty model response degrades gracefully instead of
+// discarding a whole (expensive) generation. Mins stay loose for the same
+// reason — the prompt asks for the ideal ranges.
 export const ArchitectureSchema = z.object({
   overview: z.string().min(1),
   components: z.array(ArchitectureComponentSchema).min(1).max(6),
-  flow: z.array(z.string().min(1)).min(4).max(8),
+  flow: z.array(z.string().min(1)).min(3).max(8),
 });
 
 export const ExampleProjectSchema = z.object({
@@ -53,13 +57,13 @@ export const ToolSchema = z.object({
   why_it_matters: z.string().min(1),
   difficulty: z.enum(DIFFICULTIES),
   architecture: ArchitectureSchema,
-  key_features: z.array(z.string().min(1)).min(3).max(5),
+  key_features: z.array(z.string().min(1)).min(2).max(5),
   when_to_use: z.string().min(1),
   example_project: ExampleProjectSchema,
-  papers: z.array(PaperSchema).min(2).max(3),
-  projects: z.array(ProjectSchema).min(2).max(3),
-  companies: z.array(z.string().min(1)).min(4).max(6),
-  resources: z.array(ResourceSchema).min(2).max(3),
+  papers: z.array(PaperSchema).min(1).max(3),
+  projects: z.array(ProjectSchema).min(1).max(3),
+  companies: z.array(z.string().min(1)).min(2).max(6),
+  resources: z.array(ResourceSchema).min(1).max(3),
 });
 
 export type ToolPayload = z.infer<typeof ToolSchema>;
