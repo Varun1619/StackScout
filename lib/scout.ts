@@ -1,0 +1,111 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { ToolSchema, type ToolPayload } from "./schema";
+
+const anthropic = new Anthropic();
+
+const SCHEMA_FOR_PROMPT = `{
+  "name": "string",
+  "category": "Data Engineering | AI Engineering | Data Science",
+  "tagline": "one punchy line",
+  "emoji": "one emoji",
+  "what_it_is": "2 plain sentences",
+  "why_it_matters": "2 sentences on why it's in demand right now",
+  "difficulty": "Beginner | Intermediate | Advanced",
+  "architecture": {
+    "overview": "2 sentences on how it's structured / how it works internally",
+    "components": [{ "name": "string", "role": "what this piece does" }],
+    "flow": ["step 1", "step 2", "step 3"]
+  },
+  "key_features": ["string"],
+  "when_to_use": "1 sentence",
+  "example_project": {
+    "title": "a concrete, realistic project name",
+    "problem": "the problem it solves",
+    "tool_role": "exactly how THIS tool is used inside the project",
+    "stack": ["other tools alongside it"],
+    "outcome": "the result / payoff"
+  },
+  "papers": [{ "title": "string", "note": "one line", "url": "https://..." }],
+  "projects": [{ "name": "string", "note": "one line", "url": "https://..." }],
+  "companies": ["string"],
+  "resources": [{ "title": "string", "url": "https://..." }]
+}`;
+
+function buildPrompt(excludeNames: string[]): string {
+  const excludeList =
+    excludeNames.length > 0 ? excludeNames.join(", ") : "(none yet)";
+
+  return `You are StackScout, an expert scout of tools & technologies for data professionals.
+
+Pick exactly ONE tool, framework, platform, library, or technology that is heavily used
+OR much-needed in TODAY'S job market for Data Engineers, AI Engineers, or Data
+Scientists. Favor things trending or in high demand right now. Rotate across the three
+roles over time; surprise the reader with something genuinely worth learning.
+
+Do NOT pick any already shown: ${excludeList}.
+
+Use web search to gather CURRENT, REAL info: recent papers/write-ups, active projects,
+and companies known to use it. Prefer real URLs from your search. For "architecture",
+describe how the tool is actually built and how data/requests move through it. For
+"example_project", give a concrete, realistic project and state EXACTLY how this tool is
+used inside it.
+
+Respond with ONLY a JSON object wrapped in <json></json> tags, no prose outside. Do your
+reasoning silently. Use this schema: ${SCHEMA_FOR_PROMPT}`;
+}
+
+function extractJsonBlock(text: string): unknown {
+  const match = text.match(/<json>([\s\S]*?)<\/json>/);
+  if (!match) {
+    throw new Error("No <json> block found in model response");
+  }
+  return JSON.parse(match[1].trim());
+}
+
+async function callClaude(prompt: string): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 2000,
+    tools: [
+      {
+        type: "web_search_20250305",
+        name: "web_search",
+        max_uses: 8,
+      },
+    ],
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const textBlocks = response.content.filter(
+    (block): block is Anthropic.TextBlock => block.type === "text",
+  );
+  return textBlocks.map((block) => block.text).join("\n");
+}
+
+export async function scoutTool(excludeNames: string[]): Promise<ToolPayload> {
+  const prompt = buildPrompt(excludeNames);
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const text = await callClaude(prompt);
+      const parsed = extractJsonBlock(text);
+      const result = ToolSchema.safeParse(parsed);
+      if (result.success) {
+        return result.data;
+      }
+      if (attempt === 1) {
+        throw new Error(
+          `Zod validation failed after retry: ${result.error.message}`,
+        );
+      }
+    } catch (err) {
+      if (attempt === 1) {
+        throw err instanceof Error
+          ? err
+          : new Error("Unknown error during scoutTool()");
+      }
+    }
+  }
+
+  throw new Error("scoutTool() failed to produce a valid tool");
+}
