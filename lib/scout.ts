@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ToolSchema, type ToolPayload } from "./schema";
 
-const anthropic = new Anthropic();
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY?.trim(),
+});
 
 const SCHEMA_FOR_PROMPT = `{
   "name": "string",

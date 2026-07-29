@@ -11,6 +11,19 @@ async function handleScout(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Temporary diagnostic: ?debug=key returns a safe fingerprint of the
+  // ANTHROPIC_API_KEY the runtime actually sees (never the key itself).
+  if (request.nextUrl.searchParams.get("debug") === "key") {
+    const key = process.env.ANTHROPIC_API_KEY ?? "";
+    return NextResponse.json({
+      present: key.length > 0,
+      length: key.length,
+      trimmedLength: key.trim().length,
+      prefix: key.slice(0, 12),
+      suffix: key.trim().slice(-4),
+    });
+  }
+
   try {
     const tool = await getOrGenerateTodaysTool();
     return NextResponse.json(tool);
